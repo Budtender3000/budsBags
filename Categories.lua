@@ -20,12 +20,19 @@ function C:GetItemCategory(bag, slot, itemLink)
     itemLink = itemLink or GetContainerItemLink(bag, slot)
     if not itemLink then return "OTHER" end
     
+    local itemID = tonumber(itemLink:match("item:(%d+)"))
+    
+    -- Check Custom Overrides First
+    if itemID and addon.db and addon.db.profile and addon.db.profile.customCategories and addon.db.profile.customCategories[itemID] then
+        return addon.db.profile.customCategories[itemID]
+    end
+    
     local _, _, rarity, _, _, itemType, itemSubType, _, itemEquipLoc = GetItemInfo(itemLink)
     if not itemType then return "OTHER" end
     
     if rarity == 0 then return "TRASH" end
     
-    if itemType == (_G.ITEM_CLASSES and _G.ITEM_CLASSES[12]) or itemType == "Quest" or itemType == "Questgegenstand" then 
+    if itemType == "Quest" or itemType == "Questgegenstand" then 
         return "QUEST" 
     end
     
@@ -33,11 +40,11 @@ function C:GetItemCategory(bag, slot, itemLink)
         return "GEAR"
     end
     
-    if itemType == (_G.ITEM_CLASSES and _G.ITEM_CLASSES[0]) or itemType == "Consumable" or itemType == "Verbrauchsmaterial" then 
+    if itemType == "Consumable" or itemType == "Verbrauchsmaterial" then 
         return "CONSUMABLE" 
     end
     
-    if itemType == (_G.ITEM_CLASSES and _G.ITEM_CLASSES[7]) or itemType == "Trade Goods" or itemType == "Handwerkswaren" or itemType == "Reagenzie" or itemType == "Reagent" or itemType == "Juwelenschleifen" or itemType == "Gem" or itemType == "Rezept" or itemType == "Recipe" then 
+    if itemType == "Trade Goods" or itemType == "Handwerkswaren" or itemType == "Reagenzie" or itemType == "Reagent" or itemType == "Juwelenschleifen" or itemType == "Gem" or itemType == "Rezept" or itemType == "Recipe" then 
         return "TRADEGOODS" 
     end
     

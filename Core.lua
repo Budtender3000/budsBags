@@ -54,7 +54,16 @@ Core:SetScript("OnEvent", Core.OnEvent)
 
 function Core:Initialize()
     budsBagsDB = budsBagsDB or {}
-    budsBagsDB.profile = budsBagsDB.profile or { columns = 10 }
+    budsBagsDB.profile = budsBagsDB.profile or { 
+        columns = 10,
+        buttonSize = 34,
+        scale = 1.0,
+        hideEmpty = false,
+        showRarity = true,
+        sortReverse = false,
+        customCategories = {},
+        hiddenCategories = {}
+    }
     addon.db = budsBagsDB
     
     print("|cFF00FF00" .. addonName .. "|r geladen. Version 1.0.0.")

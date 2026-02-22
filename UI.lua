@@ -78,8 +78,54 @@ function UI:CreateMainFrame()
     moneyFrame:SetPoint("BOTTOMRIGHT", f, "BOTTOMRIGHT", -12, 10)
     SmallMoneyFrame_OnLoad(moneyFrame)
     MoneyFrame_SetType(moneyFrame, "PLAYER")
+    
+    local tokenFrame = CreateFrame("Frame", "budsBagsTokenFrame", f)
+    tokenFrame:SetSize(200, 20)
+    tokenFrame:SetPoint("BOTTOMRIGHT", moneyFrame, "BOTTOMLEFT", -20, 0)
+    
+    local tokenBtns = {}
+    for i = 1, 3 do
+        local tb = CreateFrame("Button", "budsBagsTokenBtn"..i, tokenFrame)
+        tb:SetSize(40, 20)
+        tb:SetPoint("RIGHT", tokenFrame, "RIGHT", -((i-1)*50), 0)
+        
+        tb.icon = tb:CreateTexture(nil, "OVERLAY")
+        tb.icon:SetSize(16, 16)
+        tb.icon:SetPoint("RIGHT", 0, 0)
+        tb.icon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
+        
+        tb.text = tb:CreateFontString(nil, "OVERLAY")
+        tb.text:SetFont(T.font, 12, "OUTLINE")
+        tb.text:SetPoint("RIGHT", tb.icon, "LEFT", -2, 0)
+        tb.text:SetTextColor(1, 1, 1)
+        tb.text:SetJustifyH("RIGHT")
+        
+        tb:SetScript("OnEnter", function(self)
+            if self.currencyId then
+                GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+                GameTooltip:SetCurrencyToken(self.currencyId)
+                GameTooltip:Show()
+            end
+        end)
+        tb:SetScript("OnLeave", function() GameTooltip:Hide() end)
+        tb:Hide()
+        tokenBtns[i] = tb
+    end
+    f.tokenBtns = tokenBtns
+    
     f:SetScript("OnShow", function()
         MoneyFrame_Update("budsBagsMoneyFrame", GetMoney())
+        UI:UpdateCurrencies()
+    end)
+    
+    f:RegisterEvent("PLAYER_MONEY")
+    f:RegisterEvent("CURRENCY_DISPLAY_UPDATE")
+    f:SetScript("OnEvent", function(self, event)
+        if event == "PLAYER_MONEY" and self:IsShown() then
+            MoneyFrame_Update("budsBagsMoneyFrame", GetMoney())
+        elseif event == "CURRENCY_DISPLAY_UPDATE" and self:IsShown() then
+            UI:UpdateCurrencies()
+        end
     end)
     
     local sortBtn = CreateFrame("Button", nil, f)
@@ -189,6 +235,25 @@ function UI:CreateMainFrame()
         UI.BagFrames[i] = bb
     end
     
+    -- Keyring Btn
+    local keyringBtn = CreateFrame("Button", "budsBagsBagBtn_Keyring", bagBar, "ItemButtonTemplate")
+    keyringBtn:SetSize(28, 28)
+    keyringBtn:SetPoint("LEFT", bagBar, "LEFT", 5 * 30, 0)
+    keyringBtn.icon = _G[keyringBtn:GetName().."IconTexture"]
+    keyringBtn.icon:SetTexture("Interface\\Icons\\INV_Misc_Key_14")
+    keyringBtn.icon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
+    keyringBtn.icon:Show()
+    keyringBtn:SetScript("OnEnter", function(self)
+        GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+        GameTooltip:SetText(KEYRING, 1, 1, 1)
+        GameTooltip:Show()
+    end)
+    keyringBtn:SetScript("OnLeave", function() GameTooltip:Hide() end)
+    keyringBtn:SetScript("OnClick", function()
+        ToggleKeyRing()
+    end)
+    UI.BagFrames[-2] = keyringBtn
+    
     -- Bank Bag Bar (hidden by default)
     local bankBagBar = CreateFrame("Frame", "budsBagsBankBagBar", f)
     bankBagBar:SetPoint("LEFT", bagBar, "RIGHT", 10, 0)
@@ -252,7 +317,11 @@ function UI:CreateMainFrame()
     -- Register Bank Events on MainFrame
     f:RegisterEvent("BANKFRAME_OPENED")
     f:RegisterEvent("BANKFRAME_CLOSED")
-    f:SetScript("OnEvent", function(self, event)
+    
+    -- Chain existing OnEvent
+    local oldOnEvent = f:GetScript("OnEvent")
+    f:SetScript("OnEvent", function(self, event, ...)
+        if oldOnEvent then oldOnEvent(self, event, ...) end
         if event == "BANKFRAME_OPENED" then
             self:Show()
             self.BankBagBar:Show()
@@ -263,6 +332,27 @@ function UI:CreateMainFrame()
             self:Hide()
         end
     end)
+end
+
+function UI:UpdateCurrencies()
+    if not self.MainFrame or not self.MainFrame.tokenBtns then return end
+    
+    for i = 1, 3 do self.MainFrame.tokenBtns[i]:Hide() end
+    
+    local numTokens = GetCurrencyListSize()
+    local displayIndex = 1
+    
+    for i = 1, numTokens do
+        local name, isHeader, isExpanded, isUnused, isWatched, count, icon, extraCurrencyType, itemID = GetCurrencyListInfo(i)
+        if not isHeader and isWatched and displayIndex <= 3 then
+            local tb = self.MainFrame.tokenBtns[displayIndex]
+            tb.currencyId = i
+            tb.icon:SetTexture(icon)
+            tb.text:SetText(count)
+            tb:Show()
+            displayIndex = displayIndex + 1
+        end
+    end
 end
 
 function UI:HookStandardBags()
@@ -329,6 +419,12 @@ function UI:GetItemButton(bag, slot)
         end)
         btn:SetScript("OnLeave", function(self) GameTooltip:Hide() end)
         btn:SetScript("OnClick", function(self, button)
+            if IsAltKeyDown() and button == "LeftButton" then
+                if btn.itemLink then
+                    UI:ToggleCategoryDropdown(btn, bag, slot)
+                end
+                return
+            end
             if button == "RightButton" then
                 UseContainerItem(bag, slot)
             else
@@ -363,6 +459,13 @@ function UI:GetItemButton(bag, slot)
         emptyTex:SetAllPoints(btn)
         btn.emptyTex = emptyTex
         
+        local searchOverlay = btn:CreateTexture(nil, "OVERLAY")
+        searchOverlay:SetAllPoints(btn)
+        searchOverlay:SetTexture("Interface\\Buttons\\CheckButtonHilight")
+        searchOverlay:SetBlendMode("ADD")
+        searchOverlay:Hide()
+        btn.searchOverlay = searchOverlay
+        
         self.ItemButtons[buttonId] = btn
     end
     return self.ItemButtons[buttonId]
@@ -392,6 +495,7 @@ function UI:FilterItems(text)
     if not text or text == "" then
         for _, btn in pairs(self.ItemButtons) do
             btn:SetAlpha(1)
+            if btn.searchOverlay then btn.searchOverlay:Hide() end
         end
         return
     end
@@ -400,17 +504,14 @@ function UI:FilterItems(text)
         if btn:IsShown() and btn.name and btn.name ~= "ZZZ" and btn.name ~= "Unknown" then
             if btn.name:lower():find(text, 1, true) then
                 btn:SetAlpha(1)
-                btn:SetBackdropBorderColor(0, 1, 0, 1)
+                if btn.searchOverlay then btn.searchOverlay:Show() end
             else
                 btn:SetAlpha(0.2)
-                local r, g, b = unpack(T.borderColor)
-                if btn.rarity and btn.rarity > 1 then
-                    r, g, b = GetItemQualityColor(btn.rarity)
-                end
-                btn:SetBackdropBorderColor(r, g, b, 1)
+                if btn.searchOverlay then btn.searchOverlay:Hide() end
             end
         elseif btn.name == "ZZZ" then
              btn:SetAlpha(0.2)
+             if btn.searchOverlay then btn.searchOverlay:Hide() end
         end
     end
 end
@@ -451,8 +552,14 @@ function UI:UpdateSlot(bag, slot)
         btn.rarity = -2
     end
     
+    
+    local showRarity = true
+    if addon.db and addon.db.profile and addon.db.profile.showRarity ~= nil then
+        showRarity = addon.db.profile.showRarity
+    end
+    
     local r, g, b = unpack(T.borderColor)
-    if btn.rarity and btn.rarity > 1 then
+    if showRarity and btn.rarity and btn.rarity > 1 then
         r, g, b = GetItemQualityColor(btn.rarity)
     end
     btn:SetBackdropBorderColor(r, g, b, 1)
@@ -467,7 +574,19 @@ function UI:UpdateAllBags()
             cf:Hide()
         end
         
-        wipe(catMapPool)
+        if not catMapPool.initialized then
+            for _, group in ipairs(addon.Categories.Groups) do
+                catMapPool[group.id] = {}
+            end
+            catMapPool["OTHER"] = {}
+            catMapPool["EMPTY"] = {}
+            catMapPool.initialized = true
+        end
+        
+        for k, v in pairs(catMapPool) do
+            if type(v) == "table" then wipe(v) end
+        end
+        
         local catMap = catMapPool
         local btnDataMap = btnDataMapPool
         local dataIdx = 1
@@ -487,42 +606,46 @@ function UI:UpdateAllBags()
         local iterEnd = atBank and 11 or 4
 
         for bag = iterStart, iterEnd do
-            local maxSlots = GetContainerNumSlots(bag)
-            if bag == -1 then maxSlots = 28 end
+            -- Skip regular tracking for -2 (Keyring) if it's not the actual iteration pass, we will do it explicitly
+            local bagsToIterate = {bag}
+            if bag == 0 and not atBank then 
+                table.insert(bagsToIterate, KEYRING_CONTAINER or -2)
+            end
             
-            for slot = 1, maxSlots do
-                local texture, itemCount, locked, quality, readable
-                local itemLink
-                if bag == -1 then
-                   texture, itemCount, locked, quality, readable, _, itemLink = GetContainerItemInfo(bag, slot)
-                else
-                   texture, itemCount, locked, quality, readable, _, itemLink = GetContainerItemInfo(bag, slot)
-                end
+            for _, currentBag in ipairs(bagsToIterate) do
+                local maxSlots = GetContainerNumSlots(currentBag)
+                if currentBag == -1 then maxSlots = 28 end
                 
-                local btn = self:GetItemButton(bag, slot)
-                btn:Show()
-                self:UpdateSlot(bag, slot)
-                
-                local catId = "OTHER"
-                if itemLink then
-                     catId = addon.Categories:GetItemCategory(bag, slot, itemLink)
-                elseif not texture then
-                     catId = "EMPTY"
-                end
-                
-                if hideEmpty and catId == "EMPTY" then
-                    btn:Hide()
-                else
-                    if not catMap[catId] then catMap[catId] = {} end
+                for slot = 1, maxSlots do
+                    local texture, itemCount, locked, quality, readable, _, itemLink = GetContainerItemInfo(currentBag, slot)
                     
-                    if not btnDataMap[dataIdx] then btnDataMap[dataIdx] = {} end
-                    local data = btnDataMap[dataIdx]
-                    data.btn = btn
-                    data.catId = catId
-                    data.rarity = btn.rarity
-                    data.name = btn.name
+                    local btn = self:GetItemButton(currentBag, slot)
+                    btn:Show()
+                    self:UpdateSlot(currentBag, slot)
                     
-                    dataIdx = dataIdx + 1
+                    local catId = "OTHER"
+                    if itemLink then
+                         catId = addon.Categories:GetItemCategory(currentBag, slot, itemLink)
+                    elseif not texture then
+                         catId = "EMPTY"
+                    end
+                    
+                    
+                    if (hideEmpty and catId == "EMPTY") or 
+                       (addon.db and addon.db.profile and addon.db.profile.hiddenCategories and addon.db.profile.hiddenCategories[catId]) then
+                        btn:Hide()
+                    else
+                        if not catMap[catId] then catMap[catId] = {} end
+                        
+                        if not btnDataMap[dataIdx] then btnDataMap[dataIdx] = {} end
+                        local data = btnDataMap[dataIdx]
+                        data.btn = btn
+                        data.catId = catId
+                        data.rarity = btn.rarity
+                        data.name = btn.name
+                        
+                        dataIdx = dataIdx + 1
+                    end
                 end
             end
         end
@@ -531,11 +654,16 @@ function UI:UpdateAllBags()
             btnDataMap[i] = nil
         end
         
+        local reverseSort = false
+        if addon.db and addon.db.profile and addon.db.profile.sortReverse then
+             reverseSort = addon.db.profile.sortReverse
+        end
+        
         table.sort(btnDataMap, function(a, b)
             if a.rarity ~= b.rarity then
-                return a.rarity > b.rarity
+                if reverseSort then return a.rarity < b.rarity else return a.rarity > b.rarity end
             end
-            return a.name < b.name
+            if reverseSort then return a.name > b.name else return a.name < b.name end
         end)
         
         for _, data in ipairs(btnDataMap) do
@@ -555,6 +683,9 @@ function UI:LayoutCategories(catMap)
     local startY = -70
     local currentY = startY
     local buttonSize = 34
+    if addon.db and addon.db.profile and addon.db.profile.buttonSize then
+        buttonSize = addon.db.profile.buttonSize
+    end
     local spacing = 4
     local columns = 10
     if addon.db and addon.db.profile and addon.db.profile.columns then
@@ -587,8 +718,13 @@ function UI:LayoutCategories(catMap)
             btn:SetSize(buttonSize, buttonSize)
             btn:SetPoint("TOPLEFT", catFrame, "TOPLEFT", col * (buttonSize + spacing), -(row * (buttonSize + spacing)) - rowOffset)
             
+             local showRarity = true
+             if addon.db and addon.db.profile and addon.db.profile.showRarity ~= nil then
+                 showRarity = addon.db.profile.showRarity
+             end
+             
              local r, g, b = unpack(T.borderColor)
-             if btn.rarity and btn.rarity > 1 then
+             if showRarity and btn.rarity and btn.rarity > 1 then
                 r, g, b = GetItemQualityColor(btn.rarity)
              end
              btn:SetBackdropBorderColor(r, g, b, 1)
@@ -604,13 +740,79 @@ function UI:LayoutCategories(catMap)
     end
     
     for _, catData in ipairs(addon.Categories.Groups) do
-        LayoutGroup(catData.id, catData.name, catMap[catData.id])
+        if not (addon.db and addon.db.profile and addon.db.profile.hiddenCategories and addon.db.profile.hiddenCategories[catData.id]) then
+            LayoutGroup(catData.id, catData.name, catMap[catData.id])
+        end
     end
-    LayoutGroup("OTHER", "Other", catMap["OTHER"])
-    LayoutGroup("EMPTY", "Empty Slots", catMap["EMPTY"])
+    if not (addon.db and addon.db.profile and addon.db.profile.hiddenCategories and addon.db.profile.hiddenCategories["OTHER"]) then
+        LayoutGroup("OTHER", "Other", catMap["OTHER"])
+    end
+    if not hideEmpty then
+        LayoutGroup("EMPTY", "Empty Slots", catMap["EMPTY"])
+    end
     
     local finalHeight = math.abs(currentY) + 45
     if finalHeight < 150 then finalHeight = 150 end
     
     self.MainFrame:SetSize(totalWidth, finalHeight)
+end
+
+function UI:ToggleCategoryDropdown(btn, bag, slot)
+    if not self.CategoryDropdown then
+        local d = CreateFrame("Frame", "budsBagsCategoryDropdown", UIParent, "UIDropDownMenuTemplate")
+        self.CategoryDropdown = d
+    end
+    
+    local d = self.CategoryDropdown
+    local itemID = tonumber(btn.itemLink:match("item:(%d+)"))
+    
+    local function OnClick(self, arg1, arg2, checked)
+        if addon.db and addon.db.profile then
+            addon.db.profile.customCategories = addon.db.profile.customCategories or {}
+            
+            if arg1 == "DEFAULT" then
+                addon.db.profile.customCategories[itemID] = nil
+            else
+                addon.db.profile.customCategories[itemID] = arg1
+            end
+            
+            if addon.UI and addon.UI.MainFrame and addon.UI.MainFrame:IsShown() then
+                addon.UI:UpdateAllBags()
+            end
+        end
+    end
+    
+    local function InitializeDropdown(self, level)
+        local info = UIDropDownMenu_CreateInfo()
+        info.text = "Assign to Category"
+        info.isTitle = true
+        info.notCheckable = true
+        UIDropDownMenu_AddButton(info, level)
+        
+        info = UIDropDownMenu_CreateInfo()
+        info.text = "Reset Default"
+        info.arg1 = "DEFAULT"
+        info.func = OnClick
+        info.checked = (not addon.db.profile.customCategories[itemID])
+        UIDropDownMenu_AddButton(info, level)
+        
+        for _, cat in ipairs(addon.Categories.Groups) do
+            info = UIDropDownMenu_CreateInfo()
+            info.text = cat.name
+            info.arg1 = cat.id
+            info.func = OnClick
+            info.checked = (addon.db.profile.customCategories[itemID] == cat.id)
+            UIDropDownMenu_AddButton(info, level)
+        end
+        
+        info = UIDropDownMenu_CreateInfo()
+        info.text = "Other"
+        info.arg1 = "OTHER"
+        info.func = OnClick
+        info.checked = (addon.db.profile.customCategories[itemID] == "OTHER")
+        UIDropDownMenu_AddButton(info, level)
+    end
+    
+    UIDropDownMenu_Initialize(d, InitializeDropdown, "MENU")
+    ToggleDropDownMenu(1, nil, d, btn, 0, 0)
 end

@@ -42,16 +42,52 @@ function O:Initialize()
     _G[scaleSlider:GetName().."High"]:SetText("2.0x")
     _G[scaleSlider:GetName().."Text"]:SetText("Scale (Größe)")
 
-    -- Hide Empty Checkout
+    scaleSlider:SetScript("OnValueChanged", function(self, value)
+        -- floor to 1 decimal place
+        local stepValue = math.floor(value * 10 + 0.5) / 10
+        if addon.db and addon.db.profile then
+            if addon.db.profile.scale ~= stepValue then
+                addon.db.profile.scale = stepValue
+                if addon.UI and addon.UI.MainFrame and addon.UI.MainFrame:IsShown() then
+                    addon.UI.MainFrame:SetScale(stepValue)
+                end
+            end
+        end
+    end)
+    
+    -- Button Size Slider
+    local btnSizeSlider = CreateFrame("Slider", "budsBagsBtnSizeSlider", panel, "OptionsSliderTemplate")
+    btnSizeSlider:SetPoint("TOPLEFT", scaleSlider, "BOTTOMLEFT", 0, -30)
+    btnSizeSlider:SetMinMaxValues(20, 60)
+    btnSizeSlider:SetValueStep(1)
+    
+    _G[btnSizeSlider:GetName().."Low"]:SetText("20")
+    _G[btnSizeSlider:GetName().."High"]:SetText("60")
+    _G[btnSizeSlider:GetName().."Text"]:SetText("Button Size (Item Größe)")
+    
+    btnSizeSlider:SetScript("OnValueChanged", function(self, value)
+        local stepValue = math.floor(value + 0.5)
+        if addon.db and addon.db.profile then
+            if addon.db.profile.buttonSize ~= stepValue then
+                addon.db.profile.buttonSize = stepValue
+                if addon.UI and addon.UI.MainFrame and addon.UI.MainFrame:IsShown() then
+                    addon.UI:UpdateAllBags()
+                end
+            end
+        end
+    end)
+    
+    -- Hide Empty Checkbox
     local hideEmptyCb = CreateFrame("CheckButton", "budsBagsHideEmptyCB", panel, "InterfaceOptionsCheckButtonTemplate")
-    hideEmptyCb:SetPoint("TOPLEFT", scaleSlider, "BOTTOMLEFT", 0, -20)
+    hideEmptyCb:SetPoint("TOPLEFT", btnSizeSlider, "BOTTOMLEFT", 0, -20)
     _G[hideEmptyCb:GetName() .. "Text"]:SetText("Hide Empty Slots")
     
-    panel:SetScript("OnShow", function()
+    hideEmptyCb:SetScript("OnClick", function(self)
         if addon.db and addon.db.profile then
-            slider:SetValue(addon.db.profile.columns or 10)
-            scaleSlider:SetValue(addon.db.profile.scale or 1.0)
-            hideEmptyCb:SetChecked(addon.db.profile.hideEmpty or false)
+             addon.db.profile.hideEmpty = self:GetChecked()
+             if addon.UI and addon.UI.MainFrame and addon.UI.MainFrame:IsShown() then
+                 addon.UI:UpdateAllBags()
+             end
         end
     end)
     
@@ -67,25 +103,42 @@ function O:Initialize()
         end
     end)
     
-    scaleSlider:SetScript("OnValueChanged", function(self, value)
-        -- floor to 1 decimal place
-        local stepValue = math.floor(value * 10 + 0.5) / 10
-        if addon.db and addon.db.profile then
-            if addon.db.profile.scale ~= stepValue then
-                addon.db.profile.scale = stepValue
-                if addon.UI and addon.UI.MainFrame and addon.UI.MainFrame:IsShown() then
-                    addon.UI.MainFrame:SetScale(stepValue)
-                end
-            end
-        end
-    end)
+    -- Show Rarity Checkbox
+    local showRarityCb = CreateFrame("CheckButton", "budsBagsShowRarityCB", panel, "InterfaceOptionsCheckButtonTemplate")
+    showRarityCb:SetPoint("TOPLEFT", hideEmptyCb, "BOTTOMLEFT", 0, -10)
+    _G[showRarityCb:GetName() .. "Text"]:SetText("Show Item Rarity Border")
     
-    hideEmptyCb:SetScript("OnClick", function(self)
+    showRarityCb:SetScript("OnClick", function(self)
         if addon.db and addon.db.profile then
-             addon.db.profile.hideEmpty = self:GetChecked()
+             addon.db.profile.showRarity = self:GetChecked()
              if addon.UI and addon.UI.MainFrame and addon.UI.MainFrame:IsShown() then
                  addon.UI:UpdateAllBags()
              end
+        end
+    end)
+    
+    -- Reverse Sort Checkbox
+    local reverseSortCb = CreateFrame("CheckButton", "budsBagsReverseSortCB", panel, "InterfaceOptionsCheckButtonTemplate")
+    reverseSortCb:SetPoint("TOPLEFT", showRarityCb, "BOTTOMLEFT", 0, -10)
+    _G[reverseSortCb:GetName() .. "Text"]:SetText("Reverse Sort Direction")
+    
+    reverseSortCb:SetScript("OnClick", function(self)
+        if addon.db and addon.db.profile then
+             addon.db.profile.sortReverse = self:GetChecked()
+             if addon.UI and addon.UI.MainFrame and addon.UI.MainFrame:IsShown() then
+                 addon.UI:UpdateAllBags()
+             end
+        end
+    end)
+    
+    panel:SetScript("OnShow", function()
+        if addon.db and addon.db.profile then
+            slider:SetValue(addon.db.profile.columns or 10)
+            scaleSlider:SetValue(addon.db.profile.scale or 1.0)
+            btnSizeSlider:SetValue(addon.db.profile.buttonSize or 34)
+            hideEmptyCb:SetChecked(addon.db.profile.hideEmpty or false)
+            showRarityCb:SetChecked(addon.db.profile.showRarity or false)
+            reverseSortCb:SetChecked(addon.db.profile.sortReverse or false)
         end
     end)
     
