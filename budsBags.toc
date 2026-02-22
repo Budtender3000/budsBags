@@ -1,7 +1,7 @@
 ## Interface: 30300
 ## Title: budsBags
 ## Notes: Ein performantes Bagnon-Style Taschen-Addon mit Auto-Kategorisierung (ArkInventory-Style).
-## Author: Budtender
+## Author: Budtender3000
 ## Version: 0.1.0-alpha
 ## SavedVariables: budsBagsDB
 
