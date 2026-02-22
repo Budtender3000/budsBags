@@ -42,8 +42,10 @@ function Core:OnEvent(event, ...)
             local bag = ...
             if type(bag) == "number" and bag >= 0 and bag <= 4 then
                 updatePending = true
-                Core.UpdateFrame.timer = 0
-                Core.UpdateFrame:Show()
+                if not Core.UpdateFrame:IsShown() then
+                    Core.UpdateFrame.timer = 0
+                    Core.UpdateFrame:Show()
+                end
             end
         end
     end

@@ -13,16 +13,10 @@ local function GetItemData(bag, slot)
     local texture, count, locked, quality, readable, lootable, link = GetContainerItemInfo(bag, slot)
     if not link then return nil end
     local name, itemLink, rarity, ilvl, reqLevel, itype, isubtype, maxStack, equipSlot, icon, vendorPrice = GetItemInfo(link)
-    local catId = addon.Categories:GetItemCategory(bag, slot)
+    local catId = addon.Categories:GetItemCategory(bag, slot, link)
     
     -- We need order for sorting later.
-    local catOrder = 100
-    for _, g in ipairs(addon.Categories.Groups) do
-        if g.id == catId then
-            catOrder = g.order
-            break
-        end
-    end
+    local catOrder = addon.Categories.OrderMap[catId] or 100
 
     -- Return table with all data needed for sorting
     return {

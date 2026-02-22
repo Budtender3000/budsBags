@@ -85,7 +85,7 @@ function UI:CreateMainFrame()
     optText:SetFont(T.font, 12, "OUTLINE")
     optText:SetPoint("CENTER", 0, 0)
     optText:SetText("Config")
-    optBtn:SetScript("OnClick", function() InterfaceOptionsFrame_OpenToCategory(addon.Options.Panel) InterfaceOptionsFrame_OpenToCategory(addon.Options.Panel) end)
+    optBtn:SetScript("OnClick", function() InterfaceOptionsFrame_OpenToCategory(addon.Options.Panel) end)
     
     self.MainFrame = f
     
@@ -243,7 +243,7 @@ function UI:UpdateAllBags()
                 btn:Show()
                 
                 if texture then
-                    pcall(SetItemButtonTexture, btn, texture)
+                    SetItemButtonTexture(btn, texture)
                     if _G[btn:GetName().."IconTexture"] then _G[btn:GetName().."IconTexture"]:Show() end
                     btn.emptyTex:Hide()
                 else
@@ -251,8 +251,8 @@ function UI:UpdateAllBags()
                     btn.emptyTex:Show()
                 end
                 
-                pcall(SetItemButtonCount, btn, itemCount or 0)
-                pcall(SetItemButtonDesaturated, btn, locked or false)
+                SetItemButtonCount(btn, itemCount or 0)
+                SetItemButtonDesaturated(btn, locked or false)
                 
                 btn.iLvlText:SetText("")
                 local catId = "OTHER"
@@ -264,14 +264,14 @@ function UI:UpdateAllBags()
                     name = itemName or name
                     rarity = itemQuality or 0
                     if itemLevel and itemLevel > 1 then
-                        pcall(function() btn.iLvlText:SetText(itemLevel) end)
+                        btn.iLvlText:SetText(itemLevel)
                     end
-                    catId = addon.Categories:GetItemCategory(bag, slot)
+                    catId = addon.Categories:GetItemCategory(bag, slot, itemLink)
                 end
                 
                 if not texture then
                     catId = "EMPTY"
-                    pcall(function() btn.iLvlText:SetText("") end)
+                    btn.iLvlText:SetText("")
                     rarity = -2
                     name = "ZZZ" 
                 end
