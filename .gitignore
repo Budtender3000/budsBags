@@ -1,0 +1,7 @@
+.vscode/
+.agent/
+.gemini/
+.env/
+GEMINI.md
+*.zip
+*.jpg
