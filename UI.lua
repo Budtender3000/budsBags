@@ -96,7 +96,7 @@ function UI:GetItemButton(bag, slot)
         btn:SetID(slot)
         
         local font = btn:CreateFontString(nil, "OVERLAY", "NumberFontNormal")
-        font:SetPoint("BOTTOMRIGHT", btn, "BOTTOMRIGHT", -2, 2)
+        font:SetPoint("TOPLEFT", btn, "TOPLEFT", 2, -2)
         font:SetTextColor(1, 1, 0)
         btn.iLvlText = font
         
@@ -122,6 +122,9 @@ end
 function UI:UpdateAllBags()
     for _, btn in pairs(self.ItemButtons) do
         btn:Hide()
+    end
+    for _, cf in pairs(self.CategoryFrames) do
+        cf:Hide()
     end
     
     local catMap = {}
@@ -152,12 +155,20 @@ function UI:UpdateAllBags()
                 btn:SetNormalTexture("Interface\\PaperDoll\\UI-Backpack-EmptySlot")
                 btn.iLvlText:SetText("")
                 catId = "OTHER" 
+            else
+                btn:SetNormalTexture("Interface\\Buttons\\UI-Quickslot2")
             end
             
             if not catMap[catId] then catMap[catId] = {} end
             table.insert(catMap[catId], btn)
             
-            if btn.UpdateTooltip then btn:UpdateTooltip() end
+            if GameTooltip:IsOwned(btn) then
+                if texture and ContainerFrameItemButton_OnEnter then
+                    ContainerFrameItemButton_OnEnter(btn)
+                else
+                    GameTooltip:Hide()
+                end
+            end
         end
     end
     
