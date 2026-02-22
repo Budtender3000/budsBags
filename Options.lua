@@ -22,24 +22,41 @@ function O:Initialize()
         addon.Sorting:SortBags()
     end)
     
+    -- Columns Slider
     local slider = CreateFrame("Slider", "budsBagsColumnsSlider", panel, "OptionsSliderTemplate")
     slider:SetPoint("TOPLEFT", btnSort, "BOTTOMLEFT", 0, -30)
     slider:SetMinMaxValues(4, 24)
     slider:SetValueStep(1)
     
-    -- Initialize value after variables loaded
-    panel:SetScript("OnShow", function()
-        if addon.db and addon.db.profile then
-            slider:SetValue(addon.db.profile.columns or 10)
-        end
-    end)
-    
     _G[slider:GetName().."Low"]:SetText("4")
     _G[slider:GetName().."High"]:SetText("24")
     _G[slider:GetName().."Text"]:SetText("Columns (Breite)")
     
+    -- Scale Slider
+    local scaleSlider = CreateFrame("Slider", "budsBagsScaleSlider", panel, "OptionsSliderTemplate")
+    scaleSlider:SetPoint("TOPLEFT", slider, "BOTTOMLEFT", 0, -30)
+    scaleSlider:SetMinMaxValues(0.5, 2.0)
+    scaleSlider:SetValueStep(0.1)
+    
+    _G[scaleSlider:GetName().."Low"]:SetText("0.5x")
+    _G[scaleSlider:GetName().."High"]:SetText("2.0x")
+    _G[scaleSlider:GetName().."Text"]:SetText("Scale (Größe)")
+
+    -- Hide Empty Checkout
+    local hideEmptyCb = CreateFrame("CheckButton", "budsBagsHideEmptyCB", panel, "InterfaceOptionsCheckButtonTemplate")
+    hideEmptyCb:SetPoint("TOPLEFT", scaleSlider, "BOTTOMLEFT", 0, -20)
+    _G[hideEmptyCb:GetName() .. "Text"]:SetText("Hide Empty Slots")
+    
+    panel:SetScript("OnShow", function()
+        if addon.db and addon.db.profile then
+            slider:SetValue(addon.db.profile.columns or 10)
+            scaleSlider:SetValue(addon.db.profile.scale or 1.0)
+            hideEmptyCb:SetChecked(addon.db.profile.hideEmpty or false)
+        end
+    end)
+    
     slider:SetScript("OnValueChanged", function(self, value)
-        local stepValue = math.floor(value + 0.5) -- Manual step adherence
+        local stepValue = math.floor(value + 0.5)
         if addon.db and addon.db.profile then
             if addon.db.profile.columns ~= stepValue then
                 addon.db.profile.columns = stepValue
@@ -47,6 +64,28 @@ function O:Initialize()
                     addon.UI:UpdateAllBags()
                 end
             end
+        end
+    end)
+    
+    scaleSlider:SetScript("OnValueChanged", function(self, value)
+        -- floor to 1 decimal place
+        local stepValue = math.floor(value * 10 + 0.5) / 10
+        if addon.db and addon.db.profile then
+            if addon.db.profile.scale ~= stepValue then
+                addon.db.profile.scale = stepValue
+                if addon.UI and addon.UI.MainFrame and addon.UI.MainFrame:IsShown() then
+                    addon.UI.MainFrame:SetScale(stepValue)
+                end
+            end
+        end
+    end)
+    
+    hideEmptyCb:SetScript("OnClick", function(self)
+        if addon.db and addon.db.profile then
+             addon.db.profile.hideEmpty = self:GetChecked()
+             if addon.UI and addon.UI.MainFrame and addon.UI.MainFrame:IsShown() then
+                 addon.UI:UpdateAllBags()
+             end
         end
     end)
     

@@ -35,6 +35,8 @@ function UI:CreateMainFrame()
     
     f:EnableMouse(true)
     f:SetMovable(true)
+    f:SetResizable(true)
+    f:SetMinResize(200, 200)
     f:RegisterForDrag("LeftButton")
     f:SetScript("OnDragStart", f.StartMoving)
     f:SetScript("OnDragStop", f.StopMovingOrSizing)
@@ -50,6 +52,27 @@ function UI:CreateMainFrame()
     closeBtn:SetSize(28, 28)
     closeBtn:SetPoint("TOPRIGHT", -2, -2)
     closeBtn:SetScript("OnClick", function() f:Hide() end)
+
+    local searchBox = CreateFrame("EditBox", "budsBagsSearchBox", f, "InputBoxTemplate")
+    searchBox:SetSize(120, 20)
+    searchBox:SetPoint("TOPRIGHT", closeBtn, "TOPLEFT", -10, -3)
+    searchBox:SetAutoFocus(false)
+    searchBox:SetMaxLetters(20)
+    searchBox:SetScript("OnTextChanged", function(self)
+        local text = self:GetText():lower()
+        UI:FilterItems(text)
+    end)
+    searchBox:SetScript("OnEscapePressed", function(self)
+        self:SetText("")
+        self:ClearFocus()
+    end)
+    searchBox:SetScript("OnEnterPressed", function(self)
+        self:ClearFocus()
+    end)
+    
+    local searchLabel = f:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    searchLabel:SetPoint("RIGHT", searchBox, "LEFT", -5, 0)
+    searchLabel:SetText("Search:")
 
     local moneyFrame = CreateFrame("Frame", "budsBagsMoneyFrame", f, "SmallMoneyFrameTemplate")
     moneyFrame:SetPoint("BOTTOMRIGHT", f, "BOTTOMRIGHT", -12, 10)
@@ -87,20 +110,164 @@ function UI:CreateMainFrame()
     optText:SetText("Config")
     optBtn:SetScript("OnClick", function() InterfaceOptionsFrame_OpenToCategory(addon.Options.Panel) end)
     
-    self.MainFrame = f
+    -- Bag Bar
+    local bagBar = CreateFrame("Frame", "budsBagsBagBar", f)
+    bagBar:SetPoint("TOPLEFT", title, "BOTTOMLEFT", 0, -5)
+    bagBar:SetSize(200, 30)
     
-    for bag = 0, 4 do
-        local bagFrame = CreateFrame("Frame", "budsBags_Bag"..bag, f)
-        bagFrame:SetID(bag)
-        self.BagFrames[bag] = bagFrame
+    for i = 0, 4 do
+        local bb = CreateFrame("Button", "budsBagsBagBtn"..i, bagBar, "ItemButtonTemplate")
+        bb:SetSize(28, 28)
+        bb:SetPoint("LEFT", bagBar, "LEFT", i * 30, 0)
+        
+        bb:SetBackdrop(T.backdrop)
+        bb:SetBackdropColor(0.1, 0.1, 0.1, 1)
+        bb:SetBackdropBorderColor(unpack(T.borderColor))
+        
+        if i == 0 then
+            bb.icon = _G[bb:GetName().."IconTexture"]
+            bb.icon:SetTexture("Interface\\Buttons\\Button-Backpack-Up")
+            bb.icon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
+            bb.icon:SetPoint("TOPLEFT", 1, -1)
+            bb.icon:SetPoint("BOTTOMRIGHT", -1, 1)
+            bb:SetScript("OnEnter", function(self)
+                GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+                GameTooltip:SetText(BACKPACK_TOOLTIP, 1, 1, 1)
+                GameTooltip:Show()
+            end)
+            bb:SetScript("OnLeave", function() GameTooltip:Hide() end)
+        else
+            bb:SetID(i)
+            local invSlot = ContainerIDToInventoryID(i)
+            
+            bb:SetScript("OnEvent", function(self, event, ...)
+                if event == "BAG_UPDATE" or event == "PLAYER_ENTERING_WORLD" then
+                    local texture = GetInventoryItemTexture("player", invSlot)
+                    if texture then
+                        _G[self:GetName().."IconTexture"]:SetTexture(texture)
+                        _G[self:GetName().."IconTexture"]:SetTexCoord(0.08, 0.92, 0.08, 0.92)
+                        _G[self:GetName().."IconTexture"]:Show()
+                        self:SetNormalTexture("")
+                    else
+                        _G[self:GetName().."IconTexture"]:Hide()
+                        self:SetNormalTexture("Interface\\PaperDoll\\UI-PaperDoll-Slot-Bag")
+                        self:GetNormalTexture():SetTexCoord(0.08, 0.92, 0.08, 0.92)
+                    end
+                end
+            end)
+            bb:RegisterEvent("BAG_UPDATE")
+            bb:RegisterEvent("PLAYER_ENTERING_WORLD")
+            
+            bb:SetScript("OnEnter", function(self)
+                GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+                local hasItem, hasCooldown, repairCost = GameTooltip:SetInventoryItem("player", invSlot)
+                if not hasItem then
+                    GameTooltip:SetText(EQUIP_CONTAINER, 1, 1, 1)
+                end
+                CursorUpdate(self)
+            end)
+            bb:SetScript("OnLeave", function()
+                GameTooltip:Hide()
+                ResetCursor()
+            end)
+            bb:SetScript("OnClick", function(self)
+                if CursorHasItem() then
+                    PutItemInBag(invSlot)
+                else
+                    PickupBagFromSlot(invSlot)
+                end
+            end)
+            bb:SetScript("OnReceiveDrag", function(self)
+                PutItemInBag(invSlot)
+            end)
+            bb:SetScript("OnDragStart", function(self)
+                PickupBagFromSlot(invSlot)
+            end)
+            bb:RegisterForDrag("LeftButton")
+            bb:RegisterForClicks("LeftButtonUp", "RightButtonUp")
+        end
+        UI.BagFrames[i] = bb
     end
     
+    -- Bank Bag Bar (hidden by default)
+    local bankBagBar = CreateFrame("Frame", "budsBagsBankBagBar", f)
+    bankBagBar:SetPoint("LEFT", bagBar, "RIGHT", 10, 0)
+    bankBagBar:SetSize(7 * 30, 30)
+    bankBagBar:Hide() -- Only show when at bank
+    f.BankBagBar = bankBagBar
+    
+    local bankBtn = CreateFrame("Button", "budsBagsBankBtn_Bank", bankBagBar, "ItemButtonTemplate")
+    bankBtn:SetSize(28, 28)
+    bankBtn:SetPoint("LEFT", bankBagBar, "LEFT", 0, 0)
+    bankBtn.icon = _G[bankBtn:GetName().."IconTexture"]
+    bankBtn.icon:SetTexture("Interface\\Icons\\INV_Box_02") -- Placeholder for Bank
+    bankBtn.icon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
+    bankBtn:SetScript("OnEnter", function(self)
+        GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+        GameTooltip:SetText("Bank", 1, 1, 1)
+        GameTooltip:Show()
+    end)
+    bankBtn:SetScript("OnLeave", function() GameTooltip:Hide() end)
+    UI.BagFrames[-1] = bankBtn
+
+    for i = 1, 7 do
+        local bagId = i + 4
+        local bb = CreateFrame("Button", "budsBagsBankBagBtn"..bagId, bankBagBar, "ItemButtonTemplate")
+        bb:SetSize(28, 28)
+        bb:SetPoint("LEFT", bankBagBar, "LEFT", i * 30, 0)
+        
+        local invSlot = BankButtonIDToInvSlotID(i)
+        
+        bb:SetScript("OnEvent", function(self, event)
+            if event == "BANKFRAME_OPENED" or event == "PLAYERBANKBAGS_CHANGED" then
+                local texture = GetInventoryItemTexture("player", invSlot)
+                if texture then
+                    _G[self:GetName().."IconTexture"]:SetTexture(texture)
+                    _G[self:GetName().."IconTexture"]:Show()
+                else
+                    _G[self:GetName().."IconTexture"]:Hide()
+                end
+            end
+        end)
+        bb:RegisterEvent("BANKFRAME_OPENED")
+        bb:RegisterEvent("PLAYERBANKBAGS_CHANGED")
+        
+        bb:SetScript("OnEnter", function(self)
+            GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+            GameTooltip:SetInventoryItem("player", invSlot)
+            CursorUpdate(self)
+        end)
+        bb:SetScript("OnLeave", function() GameTooltip:Hide(); ResetCursor(); end)
+        bb:SetScript("OnClick", function()
+             if CursorHasItem() then PutItemInBag(invSlot) else PickupBagFromSlot(invSlot) end
+        end)
+        
+        UI.BagFrames[bagId] = bb
+    end
+    
+    self.MainFrame = f
+    
     tinsert(UISpecialFrames, "budsBagsMainFrame")
+    
+    -- Register Bank Events on MainFrame
+    f:RegisterEvent("BANKFRAME_OPENED")
+    f:RegisterEvent("BANKFRAME_CLOSED")
+    f:SetScript("OnEvent", function(self, event)
+        if event == "BANKFRAME_OPENED" then
+            self:Show()
+            self.BankBagBar:Show()
+            UI:UpdateAllBags()
+        elseif event == "BANKFRAME_CLOSED" then
+            self.BankBagBar:Hide()
+            UI:UpdateAllBags()
+            self:Hide()
+        end
+    end)
 end
 
 function UI:HookStandardBags()
     hooksecurefunc("ToggleBackpack", function()
-        if UI.MainFrame:IsShown() then
+        if UI.MainFrame:IsShown() and not UI.MainFrame.BankBagBar:IsShown() then
             UI.MainFrame:Hide()
         else
             UI.MainFrame:Show()
@@ -128,6 +295,7 @@ function UI:HookStandardBags()
             _G["ContainerFrame"..i]:SetParent(hiddenParent)
         end
     end
+    if BankFrame then BankFrame:SetParent(hiddenParent) end
 end
 
 function UI:GetItemButton(bag, slot)
@@ -152,7 +320,11 @@ function UI:GetItemButton(bag, slot)
         
         btn:SetScript("OnEnter", function(self)
             GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
-            GameTooltip:SetBagItem(bag, slot)
+            if bag == -1 then
+                GameTooltip:SetInventoryItem("player", BankButtonIDToInvSlotID(slot, 1))
+            else
+                GameTooltip:SetBagItem(bag, slot)
+            end
             GameTooltip:Show()
         end)
         btn:SetScript("OnLeave", function(self) GameTooltip:Hide() end)
@@ -185,12 +357,10 @@ function UI:GetItemButton(bag, slot)
             icon:SetPoint("BOTTOMRIGHT", btn, "BOTTOMRIGHT", -1, 1)
         end
         
-        -- Default background for empty slots (using empty slot icon texture)
         local emptyTex = btn:CreateTexture(nil, "BACKGROUND")
         emptyTex:SetTexture("Interface\\PaperDoll\\UI-PaperDoll-Slot-Bag")
         emptyTex:SetTexCoord(0.08, 0.92, 0.08, 0.92)
         emptyTex:SetAllPoints(btn)
-        -- Keep track of it to hide/show when item is present
         btn.emptyTex = emptyTex
         
         self.ItemButtons[buttonId] = btn
@@ -218,6 +388,76 @@ end
 local catMapPool = {}
 local btnDataMapPool = {}
 
+function UI:FilterItems(text)
+    if not text or text == "" then
+        for _, btn in pairs(self.ItemButtons) do
+            btn:SetAlpha(1)
+        end
+        return
+    end
+    
+    for _, btn in pairs(self.ItemButtons) do
+        if btn:IsShown() and btn.name and btn.name ~= "ZZZ" and btn.name ~= "Unknown" then
+            if btn.name:lower():find(text, 1, true) then
+                btn:SetAlpha(1)
+                btn:SetBackdropBorderColor(0, 1, 0, 1)
+            else
+                btn:SetAlpha(0.2)
+                local r, g, b = unpack(T.borderColor)
+                if btn.rarity and btn.rarity > 1 then
+                    r, g, b = GetItemQualityColor(btn.rarity)
+                end
+                btn:SetBackdropBorderColor(r, g, b, 1)
+            end
+        elseif btn.name == "ZZZ" then
+             btn:SetAlpha(0.2)
+        end
+    end
+end
+
+-- Efficient Update Function
+function UI:UpdateSlot(bag, slot)
+    local texture, itemCount, locked, quality, readable, lootable, itemLink = GetContainerItemInfo(bag, slot)
+    
+    local btn = self:GetItemButton(bag, slot)
+    if not btn then return end
+    
+    if texture then
+        SetItemButtonTexture(btn, texture)
+        if _G[btn:GetName().."IconTexture"] then _G[btn:GetName().."IconTexture"]:Show() end
+        btn.emptyTex:Hide()
+    else
+        if _G[btn:GetName().."IconTexture"] then _G[btn:GetName().."IconTexture"]:Hide() end
+        btn.emptyTex:Show()
+    end
+    
+    SetItemButtonCount(btn, itemCount or 0)
+    SetItemButtonDesaturated(btn, locked or false)
+    
+    btn.iLvlText:SetText("")
+    btn.name = "Unknown"
+    btn.rarity = 0
+    btn.itemLink = itemLink
+    
+    if itemLink then
+        local itemName, _, itemQuality, itemLevel = GetItemInfo(itemLink)
+        btn.name = itemName or btn.name
+        btn.rarity = itemQuality or 0
+        if itemLevel and itemLevel > 1 then
+            btn.iLvlText:SetText(itemLevel)
+        end
+    elseif not texture then
+        btn.name = "ZZZ"
+        btn.rarity = -2
+    end
+    
+    local r, g, b = unpack(T.borderColor)
+    if btn.rarity and btn.rarity > 1 then
+        r, g, b = GetItemQualityColor(btn.rarity)
+    end
+    btn:SetBackdropBorderColor(r, g, b, 1)
+end
+
 function UI:UpdateAllBags()
     local success, err = pcall(function()
         for _, btn in pairs(self.ItemButtons) do
@@ -228,67 +468,62 @@ function UI:UpdateAllBags()
         end
         
         wipe(catMapPool)
-        
         local catMap = catMapPool
         local btnDataMap = btnDataMapPool
         local dataIdx = 1
         
-        for bag = 0, 4 do
+        local atBank = self.MainFrame.BankBagBar and self.MainFrame.BankBagBar:IsShown()
+        
+        -- Config options
+        local hideEmpty = false
+        local scale = 1.0
+        if addon.db and addon.db.profile then
+            hideEmpty = addon.db.profile.hideEmpty or false
+            scale = addon.db.profile.scale or 1.0
+        end
+        self.MainFrame:SetScale(scale)
+        
+        local iterStart = atBank and -1 or 0
+        local iterEnd = atBank and 11 or 4
+
+        for bag = iterStart, iterEnd do
             local maxSlots = GetContainerNumSlots(bag)
+            if bag == -1 then maxSlots = 28 end
+            
             for slot = 1, maxSlots do
-                local texture, itemCount, locked, quality, readable = GetContainerItemInfo(bag, slot)
-                local itemLink = GetContainerItemLink(bag, slot)
+                local texture, itemCount, locked, quality, readable
+                local itemLink
+                if bag == -1 then
+                   texture, itemCount, locked, quality, readable, _, itemLink = GetContainerItemInfo(bag, slot)
+                else
+                   texture, itemCount, locked, quality, readable, _, itemLink = GetContainerItemInfo(bag, slot)
+                end
                 
                 local btn = self:GetItemButton(bag, slot)
                 btn:Show()
+                self:UpdateSlot(bag, slot)
                 
-                if texture then
-                    SetItemButtonTexture(btn, texture)
-                    if _G[btn:GetName().."IconTexture"] then _G[btn:GetName().."IconTexture"]:Show() end
-                    btn.emptyTex:Hide()
-                else
-                    if _G[btn:GetName().."IconTexture"] then _G[btn:GetName().."IconTexture"]:Hide() end
-                    btn.emptyTex:Show()
-                end
-                
-                SetItemButtonCount(btn, itemCount or 0)
-                SetItemButtonDesaturated(btn, locked or false)
-                
-                btn.iLvlText:SetText("")
                 local catId = "OTHER"
-                local rarity = 0
-                local name = "Unknown"
-                
                 if itemLink then
-                    local itemName, _, itemQuality, itemLevel = GetItemInfo(itemLink)
-                    name = itemName or name
-                    rarity = itemQuality or 0
-                    if itemLevel and itemLevel > 1 then
-                        btn.iLvlText:SetText(itemLevel)
-                    end
-                    catId = addon.Categories:GetItemCategory(bag, slot, itemLink)
+                     catId = addon.Categories:GetItemCategory(bag, slot, itemLink)
+                elseif not texture then
+                     catId = "EMPTY"
                 end
                 
-                if not texture then
-                    catId = "EMPTY"
-                    btn.iLvlText:SetText("")
-                    rarity = -2
-                    name = "ZZZ" 
+                if hideEmpty and catId == "EMPTY" then
+                    btn:Hide()
+                else
+                    if not catMap[catId] then catMap[catId] = {} end
+                    
+                    if not btnDataMap[dataIdx] then btnDataMap[dataIdx] = {} end
+                    local data = btnDataMap[dataIdx]
+                    data.btn = btn
+                    data.catId = catId
+                    data.rarity = btn.rarity
+                    data.name = btn.name
+                    
+                    dataIdx = dataIdx + 1
                 end
-                
-                -- Save rarity on button for border coloring
-                btn.rarity = rarity
-                
-                if not catMap[catId] then catMap[catId] = {} end
-                
-                if not btnDataMap[dataIdx] then btnDataMap[dataIdx] = {} end
-                local data = btnDataMap[dataIdx]
-                data.btn = btn
-                data.catId = catId
-                data.rarity = rarity
-                data.name = name
-                
-                dataIdx = dataIdx + 1
             end
         end
         
@@ -317,17 +552,22 @@ end
 
 function UI:LayoutCategories(catMap)
     local startX = 10
-    local startY = -35
+    local startY = -70
     local currentY = startY
     local buttonSize = 34
     local spacing = 4
-    -- Use user config column count or fallback to 10
     local columns = 10
     if addon.db and addon.db.profile and addon.db.profile.columns then
         columns = addon.db.profile.columns
     end
     
     local totalWidth = (startX * 2) + (columns * buttonSize) + ((columns - 1) * spacing)
+    
+    if self.MainFrame.BankBagBar and self.MainFrame.BankBagBar:IsShown() then
+        if totalWidth < 450 then totalWidth = 450 end
+    else
+        if totalWidth < 250 then totalWidth = 250 end
+    end
     
     local function LayoutGroup(catId, catName, items)
         if not items or #items == 0 then return end
@@ -347,13 +587,12 @@ function UI:LayoutCategories(catMap)
             btn:SetSize(buttonSize, buttonSize)
             btn:SetPoint("TOPLEFT", catFrame, "TOPLEFT", col * (buttonSize + spacing), -(row * (buttonSize + spacing)) - rowOffset)
             
-            -- Set button border based on item rarity
-            local r, g, b = unpack(T.borderColor)
-            if btn.rarity and btn.rarity > 1 then
+             local r, g, b = unpack(T.borderColor)
+             if btn.rarity and btn.rarity > 1 then
                 r, g, b = GetItemQualityColor(btn.rarity)
-            end
-            btn:SetBackdropBorderColor(r, g, b, 1)
-            
+             end
+             btn:SetBackdropBorderColor(r, g, b, 1)
+
             col = col + 1
             if col >= columns then
                 col, row = 0, row + 1
@@ -370,5 +609,8 @@ function UI:LayoutCategories(catMap)
     LayoutGroup("OTHER", "Other", catMap["OTHER"])
     LayoutGroup("EMPTY", "Empty Slots", catMap["EMPTY"])
     
-    self.MainFrame:SetSize(totalWidth, math.abs(currentY) + 35)
+    local finalHeight = math.abs(currentY) + 45
+    if finalHeight < 150 then finalHeight = 150 end
+    
+    self.MainFrame:SetSize(totalWidth, finalHeight)
 end
