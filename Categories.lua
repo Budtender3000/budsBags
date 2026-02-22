@@ -3,12 +3,12 @@ addon.Categories = {}
 local C = addon.Categories
 
 C.Groups = {
-    { id = "GEAR", name = "Ausrüstung", order = 1 },
-    { id = "CONSUMABLE", name = "Verbrauchsgüter", order = 2 },
-    { id = "TRADEGOODS", name = "Handwerkswaren", order = 3 },
-    { id = "QUEST", name = "Quest-Gegenstände", order = 4 },
-    { id = "TRASH", name = "Müll", order = 5 },
-    { id = "OTHER", name = "Sonstiges", order = 6 },
+    { id = "GEAR", name = "Equipment", order = 1 },
+    { id = "CONSUMABLE", name = "Consumables", order = 2 },
+    { id = "TRADEGOODS", name = "Trade Goods", order = 3 },
+    { id = "QUEST", name = "Quest Items", order = 4 },
+    { id = "TRASH", name = "Junk", order = 5 },
+    { id = "OTHER", name = "Other", order = 6 },
 }
 
 function C:GetItemCategory(bag, slot)
@@ -17,25 +17,30 @@ function C:GetItemCategory(bag, slot)
     
     local _, _, rarity, _, _, itemType, itemSubType, _, itemEquipLoc = GetItemInfo(itemLink)
     if not itemType then return "OTHER" end
-
     -- Grey items are trash
     if rarity == 0 then
         return "TRASH"
     end
     
-    -- Rüstung & Waffen
-    if itemType == "Rüstung" or itemType == "Waffe" or itemType == "Armor" or itemType == "Weapon" then
-        return "GEAR"
-    -- Verbrauchsgüter
-    elseif itemType == "Verbrauchsmaterial" or itemType == "Consumable" or itemType == "Trank" or itemType == "Flask" then
-        return "CONSUMABLE"
-    -- Handwerk
-    elseif itemType == "Handwerkswaren" or itemType == "Trade Goods" or itemType == "Reagenzie" or itemType == "Reagent" or itemType == "Juwelenschleifen" or itemType == "Gem" then
-        return "TRADEGOODS"
     -- Quest items
-    elseif itemType == "Quest" then
+    if itemType == "Quest" then
         return "QUEST"
-    else
-        return "OTHER"
     end
+    
+    -- Rüstung & Waffen
+    if itemType == _G.ARMOR or itemType == _G.ENCHSLOT_WEAPON or itemType == "Rüstung" or itemType == "Waffe" or itemType == "Armor" or itemType == "Weapon" or (itemEquipLoc and itemEquipLoc ~= "") then
+        return "GEAR"
+    end
+    
+    -- Verbrauchsgüter
+    if itemType == "Verbrauchsmaterial" or itemType == "Consumable" then
+        return "CONSUMABLE"
+    end
+    
+    -- Handwerk
+    if itemType == "Handwerkswaren" or itemType == "Trade Goods" or itemType == "Reagenzie" or itemType == "Reagent" or itemType == "Juwelenschleifen" or itemType == "Gem" or itemType == "Rezept" or itemType == "Recipe" then
+        return "TRADEGOODS"
+    end
+    
+    return "OTHER"
 end

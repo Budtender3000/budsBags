@@ -9,3 +9,4 @@ Core.lua
 Categories.lua
 Sorting.lua
 UI.lua
+Options.lua
