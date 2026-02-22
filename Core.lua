@@ -33,7 +33,7 @@ end
 Core:SetScript("OnEvent", Core.OnEvent)
 
 function Core:Initialize()
-    print("|cFF00FF00" .. addonName .. "|r geladen. Version 0.1.0-alpha.")
+    print("|cFF00FF00" .. addonName .. "|r geladen. Version 1.0.0.")
 end
 
 function Core:OnLogin()
